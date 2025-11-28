@@ -1,19 +1,15 @@
 package main.java;
 
-import main.java.dao.EmployeeDAO;
-import main.java.service.EmployeeService;
-import main.java.service.FacilityService;
-import main.java.entities.ExecutiveOfficer;
-import main.java.entities.MidLevelManager;
-import main.java.config.DatabaseConfig;
-import main.java.entities.BaseLevelWorker;
-import main.java.entities.Building;
-
+import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Scanner;
-
-import java.sql.*;
+import main.java.config.DatabaseConfig;
+import main.java.dao.EmployeeDAO;
+import main.java.entities.BaseLevelWorker;
+import main.java.entities.ExecutiveOfficer;
+import main.java.entities.MidLevelManager;
+import main.java.service.FacilityService;
 
 public class CLI {
     private static Scanner scanner = new Scanner(System.in);
@@ -22,15 +18,21 @@ public class CLI {
     private static Connection conn;
     private static Statement stmt;
     private static Statement checkStmt;
+    private static PreparedStatement checkPstmt;
+    private static PreparedStatement updateMidPstmt;
+    private static PreparedStatement updateEOPstmt;
+    private static ResultSet rs;
 
     public static void main(String[] args) throws SQLException {
         conn = DatabaseConfig.getInstance().getConnection();
         stmt = conn.createStatement();
         checkStmt = conn.createStatement();
-        boolean flag = false;
+        checkPstmt = null;
+        updateMidPstmt = null;
+        updateEOPstmt = null;
+        rs = null;
 
 
-        while (!flag) {
             System.out.println("=== CMMS系统 ===");
             System.out.println("1. 员工管理");
             System.out.println("2. 设施管理");
@@ -57,11 +59,13 @@ public class CLI {
                 default:
                     System.out.println("无效选择");
             }
-        }
+
     }
 
+
     private static void handleEmployeeManagement() throws SQLException {
-        while (true) {
+        int choice1;
+        do{
             System.out.println("1. 添加员工");      //在这里区分高管还是其他
             System.out.println("2. 查询员工");
             System.out.println("3. 更新员工信息");
@@ -69,7 +73,7 @@ public class CLI {
             System.out.println("5. 返回上一级");
 
             System.out.print("请选择: ");
-            int choice1 = Integer.parseInt(scanner.nextLine());
+            choice1 = Integer.parseInt(scanner.nextLine());
 
             if (choice1 == 5) break;
 
@@ -89,7 +93,7 @@ public class CLI {
                 default:
                     System.out.println("无效选择");
             }
-        }
+        }while (choice1 !=4);
     }
 
     private static void addExecutiveOfficer() {
@@ -260,7 +264,6 @@ public class CLI {
                         // 是 INSERT/UPDATE/DELETE → 打印影响行数
                         System.out.println("Done! " + stmt.getUpdateCount() + " lines is revised!");
                     }
-                    break;
                 } catch (SQLException e) {
                     System.out.println(e.getMessage());
                 }
@@ -384,7 +387,6 @@ public class CLI {
                         // 是 INSERT/UPDATE/DELETE → 打印影响行数
                         System.out.println("Done! " + stmt.getUpdateCount() + " lines is revised!");
                     }
-                    break;
                 } catch (SQLException e) {
                     System.out.println(e.getMessage());
                 }
@@ -447,9 +449,7 @@ public class CLI {
                     // 执行查询并判断结果
                     try (ResultSet rs = checkStmt.executeQuery(checkSql);) {
                         if (!rs.next()) {
-                            // ID不存在时抛出明确错误
                             System.err.println("错误：" + tableName + " 表中不存在ID为 [" + employeeId + "] 的员工！");
-                            continue;// 终止后续删除操作
                         } else {
                             break;
                         }
@@ -457,8 +457,6 @@ public class CLI {
                 } catch (SQLException e) {
                     System.err.println("检查员工ID存在性时出错：" + e.getMessage());
                     e.printStackTrace();
-                    continue;
-//                return; // 终止操作//please use while loop and change this to continue
                 }
             }
 
@@ -503,7 +501,6 @@ public class CLI {
                         } else {
                             System.out.println("删除失败");
                         }
-                        break;
                     default:
                         System.out.println("无效选择");
                 }
@@ -530,7 +527,7 @@ public class CLI {
 
     }
 
-    private static void updateEmployee() {
+    private static void updateEmployee() throws SQLException {
         try {
             scanner = new Scanner(System.in);
             System.out.println("\n=== 员工级别 ===");
@@ -601,15 +598,15 @@ public class CLI {
                         String eoemail = scanner.nextLine();
 
                         String sql1 = "UPDATE mid_level_manager " +
-                                "SET EO_ID '" + eoid + "'," +
-                                "WHERE EO_ID = '" + employeeId + "'";
+                                "SET EO_ID ='" + eoid +
+                                "'WHERE EO_ID = '" + employeeId + "'";
                         stmt.executeUpdate(sql1);
                         String sql = "UPDATE executive_officer " +
-                                "SET EO_ID '" + eoid + "'," +
-                                "Name '" + eoname + "'," +
-                                "Contact '" + eocontact + "'," +
-                                "Email '" + eoemail + "'," +
-                                "WHERE EO_ID = '" + employeeId + "'";
+                                "SET EO_ID ='" + eoid + "'," +
+                                "Name ='" + eoname + "'," +
+                                "Contact ='" + eocontact + "'," +
+                                "Email ='" + eoemail +
+                                "'WHERE EO_ID = '" + employeeId + "'";
                         int rowsAffected1 = stmt.executeUpdate(sql);
                         if (rowsAffected1 > 0) {
                             System.out.println("update成功");
@@ -631,20 +628,20 @@ public class CLI {
                         String midupper = scanner.nextLine();
 
                         String sql2 = "UPDATE base_level_worker " +
-                                "SET MLM_ID '" + midid + "'," +
-                                "WHERE MLM_ID = '" + employeeId + "'";
+                                "SET MLM_ID ='" + midid +
+                                "'WHERE MLM_ID = '" + employeeId + "'";
                         stmt.executeUpdate(sql2);
                         String sql4 = "UPDATE building " +
-                                "SET BLW_ID '" + midid + "'," +
-                                "WHERE BLW_ID = '" + employeeId + "'";
+                                "SET MLM_ID ='" + midid +
+                                "'WHERE MLM_ID = '" + employeeId + "'";
                         stmt.executeUpdate(sql4);
-                        String sql3 = "UPDATE executive_officer " +
-                                "SET MLM_ID '" + midid + "'," +
-                                "Name '" + midname + "'," +
-                                "Contact '" + midcontact + "'," +
-                                "Email '" + midemail + "'," +
-                                "EO_ID '" + midupper + "'," +
-                                "WHERE MLM_ID = '" + employeeId + "'";
+                        String sql3 = "UPDATE mid_level_manager " +
+                                "SET MLM_ID ='" + midid + "'," +
+                                "Name ='" + midname + "'," +
+                                "Contact ='" + midcontact + "'," +
+                                "Email ='" + midemail + "'," +
+                                "EO_ID ='" + midupper +
+                                "'WHERE MLM_ID = '" + employeeId + "'";
                         int rowsAffected2 = stmt.executeUpdate(sql3);
                         if (rowsAffected2 > 0) {
                             System.out.println("update成功");
@@ -668,13 +665,13 @@ public class CLI {
                         System.out.print("输入上级ID: ");
                         String bidupper = scanner.nextLine();
 
-                        String sql5 = "UPDATE executive_officer " +
-                                "SET BLW_ID '" + bidid + "'," +
-                                "Name '" + bidname + "'," +
-                                "Contact '" + bidcontact + "'," +
-                                "Email '" + bidemail + "'," +
-                                "MLM_ID '" + bidupper + "'," +
-                                "WHERE BLM_ID = '" + employeeId + "'";
+                        String sql5 = "UPDATE base_level_worker " +
+                                "SET BLW_ID ='" + bidid + "'," +
+                                "Name ='" + bidname + "'," +
+                                "Contact ='" + bidcontact + "'," +
+                                "Email ='" + bidemail + "'," +
+                                "MLM_ID ='" + bidupper +
+                                "' WHERE BLW_ID = '" + employeeId + "'";
                         int rowsAffected3 = stmt.executeUpdate(sql5);
                         if (rowsAffected3 > 0) {
                             System.out.println("update成功");
@@ -687,25 +684,22 @@ public class CLI {
                         System.out.println("无效选择");
                 }
             } catch (SQLException e) {
-                System.err.println("删除员工时出错：" + e.getMessage());
+                System.err.println("update员工时出错：" + e.getMessage());
                 e.printStackTrace();
             }
 
         } catch (NumberFormatException e) {
             System.out.println("输入错误，请输入数字");
-        } finally {
-            // 🔧 修复：关闭scanner和conn，避免资源泄漏
-            if (scanner != null) {
-                scanner.close();
-            }
-            if (conn != null) {
-                try {
-                    conn.close();
-                } catch (SQLException e) {
-                    e.printStackTrace();
-                }
-            }
         }
+//        finally {
+//            // 关闭所有资源
+//            if (rs != null) rs.close();
+//            if (checkPstmt != null) checkPstmt.close();
+//            if (updateMidPstmt != null) updateMidPstmt.close();
+//            if (updateEOPstmt != null) updateEOPstmt.close();
+//            if (conn != null) conn.close();
+//            // 不关闭scanner（全局复用）
+//        }
     }
 
     private static void handleFacilityManagement() {
@@ -789,5 +783,4 @@ public class CLI {
             System.out.println(e.getMessage());
         }
     }
-
 }
